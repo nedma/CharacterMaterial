@@ -2,14 +2,12 @@ Shader "WeNZ/VehiclePBR" {
 Properties {
 	_Color ("Main Color", Color) = (1,1,1,1)
 	_MainTex ("Base (RGB)", 2D) = "white" {}
-	_MaskTex ("Light mask (RG) Matelness(B)", 2D) = "white" {}
-	_IllumColorR ("IllumColorR", Color) = (1,1,1,1)
-	_IllumColorG ("IllumColorG", Color) = (1,1,1,1)
-	_IllumIntensityR  ("IllumIntensityR", Range (0.00, 5)) = 1
-	_IllumIntensityG  ("IllumIntensityG", Range (0.00, 5)) = 1
-
-	_Roughness ("Roughness", Range(0.01,1)) = 0.5
+	//_MaskTex ("Light mask (RG) Matelness(B)", 2D) = "white" {}
+	_MetalnessTex ("Metalness", 2D) = "white" {}
+	_RoughnessTex ("Roughness", 2D) = "white" {}
 	_BumpMap ("Normal (Normal)", 2D) = "bump" {}
+
+	_Roughness ("Roughness Value", Range(0.01,1)) = 0.028
 	_Fresnel ("Fresnel Value", Range(0.01,1)) = 0.028
 
 	_SpeuclarEnvMap("Reflection Map", Cube) = "_Skybox" { TexGen CubeReflect }
@@ -26,7 +24,7 @@ SubShader
     {
         Tags { "Queue" = "Geometry" "IgnoreProjector" = "True" }
         LOD 400
-		CULL Off
+		//CULL Off
 
         Pass
         {
@@ -44,7 +42,7 @@ SubShader
 			#include "Lighting.cginc"
 			#include "AutoLight.cginc"
 
-            //#define USE_REAL_LIGHT
+            #define USE_REAL_LIGHT
             
             // vertex-to-fragment interpolation data
 			struct v2f_surf {
@@ -71,7 +69,9 @@ SubShader
             
             fixed4 _Color;
             sampler2D _MainTex, _BumpMap;//, _Beckmann;
-            sampler2D _MaskTex;
+            //sampler2D _MaskTex;
+	    sampler2D _MetalnessTex;
+	    sampler2D _RoughnessTex;
 
 			sampler2D unity_Lightmap;
 			sampler2D unity_LightmapInd;
@@ -82,23 +82,18 @@ SubShader
             float _Fresnel,_Roughness,_GaussConstant, _EnvLightIntensity;
 			fixed4 _WorldSpaceLightDir;
 			fixed3 _LightColor;
-
-			fixed4 _IllumColorR;
-			fixed4 _IllumColorG;
-			half _IllumIntensityR;
-			half _IllumIntensityG;
             
 
 			struct SurfaceOutputCustom
 			{
 				half3 Albedo;
 				half3 Normal;
-				half3 Emission;
-				half3 SpecularNormal; //custom
+				half3 Emission;			
 				half Specular;
 				half Gloss;
 				half Alpha;
 				half Metalness;
+				half Roughness;
 			};
 
              void surf (Input IN, inout SurfaceOutputCustom o)
@@ -111,14 +106,15 @@ SubShader
 				//fixed4 reflcol = texCUBE (_SpeuclarEnvMap, IN.worldRefl);
 				//o.Emission = reflcol.rgb;
 
-				fixed4 mask = tex2D(_MaskTex, IN.uv_MainTex);
-				o.Emission += _IllumColorR * mask.r *_IllumIntensityR + _IllumColorG * mask.g *_IllumIntensityG;
+				//fixed4 mask = tex2D(_MaskTex, IN.uv_MainTex);
+				//o.Emission += _IllumColorR * mask.r *_IllumIntensityR + _IllumColorG * mask.g *_IllumIntensityG;
 
                 o.Normal = UnpackNormal(tex2D(_BumpMap, IN.uv_MainTex));            
                 o.Normal = half3(dot(IN.TtoW0, o.Normal.xyz), dot(IN.TtoW1, o.Normal.xyz), dot(IN.TtoW2, o.Normal.xyz));             
                 o.Normal = normalize(o.Normal);
 
-				o.Metalness = mask.b;
+				o.Metalness = tex2D(_MetalnessTex, IN.uv_MainTex) * _Fresnel;
+				o.Roughness = tex2D(_RoughnessTex, IN.uv_MainTex) * _Roughness;
             }
  
             inline fixed4 LightingCookTorrance (SurfaceOutputCustom s, fixed3 lightDir, fixed3 viewDir, fixed atten)
@@ -149,13 +145,14 @@ SubShader
  				
  
  				////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                //float roughness = tex2D( _Beckmann, float2 ( NdotH_unsat * 0.5 + 0.5, _Roughness ) ).r;
+                //float roughness = tex2D( _Beckmann, float2 ( NdotH_unsat * 0.5 + 0.5, s.Roughness ) ).r;
                 
                
                 
                 //////////////
                 // beckmann distribution function
-                float _RoughnessSqr = _Roughness * _Roughness;
+		float roughness = s.Roughness;
+                float _RoughnessSqr = roughness * roughness;
                 float NdotHSqr = NdotH * NdotH;
 		        float r1 = 1.0 / ( 3.14 * _RoughnessSqr * NdotHSqr * NdotHSqr + 0.01f);
 		        float r2 = (NdotHSqr - 1.0) / (_RoughnessSqr * NdotHSqr + 0.01f);
@@ -168,14 +165,14 @@ SubShader
                 //////////////
                 // Blinn's NDF
                 //float alpha = acos(NdotH);
-				//float roughness_Blinn = _GaussConstant*exp(-(alpha*alpha)/(_Roughness * _Roughness));
+				//float roughness_Blinn = _GaussConstant*exp(-(alpha*alpha)/(roughness * roughness));
                 
                 
                 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
  
                 float fresnel = pow( 1.0 - VdotH, 5.0 );
 
-				float matFresnel = s.Metalness * _Fresnel;
+				float matFresnel = s.Metalness;
                 fresnel *= ( 1.0 - matFresnel );
                 fresnel += matFresnel;
  
@@ -221,7 +218,7 @@ SubShader
                	//c.rgb += NdotL * diffuseEnvRadiance  * diff;
 				c.rgb += _DiffuseEnvColor * diff; // use a const color to represent the env diffuse light
                  
-				c.rgb += s.Emission;
+				//c.rgb += s.Emission;
                 
                 c.a = s.Alpha;
                  
@@ -292,6 +289,7 @@ SubShader
 				o.Alpha = 0.0;
 				o.Gloss = 0.0;
 				o.Metalness = 0.0;
+				o.Roughness = 0.0;
 
 				// call surface function
 				surf (surfIN, o);
