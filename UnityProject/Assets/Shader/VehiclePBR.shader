@@ -1,4 +1,4 @@
-Shader "WeNZ/VehiclePBR" {
+ï»¿Shader "WeNZ/VehiclePBR" {
 Properties {
 	_Color ("Main Color", Color) = (1,1,1,1)
 	_MainTex ("Base (RGB)", 2D) = "white" {}
@@ -175,16 +175,16 @@ SubShader
  
                 float fresnel = pow( 1.0 - VdotH, 5.0 );
 
-				float matFresnel = s.Metalness;
+				float matFresnel = s.Metalness; // RF (0â—¦)
                 fresnel *= ( 1.0 - matFresnel );
                 fresnel += matFresnel;
  
  				float3 Cspec = lerp(float3(0.3,0.3,0.3), s.Albedo, matFresnel);
-                float3 spec = float3 ( (fresnel * geo * roughness_beckmann ) / ( NdotV * NdotL + 0.02)); // ·ÖÄ¸µÄpiÒ»°ã±»ÈÏÎªÊÇ°üº¬µ½light²ÎÊıÀïÃæÈ¥ÁËËùÒÔÕâÀï²»Ëã
+                float3 spec = float3 ( (fresnel * geo * roughness_beckmann ) / ( NdotV * NdotL + 0.02)); // åˆ†æ¯çš„piä¸€èˆ¬è¢«è®¤ä¸ºæ˜¯åŒ…å«åˆ°lightå‚æ•°é‡Œé¢å»äº†æ‰€ä»¥è¿™é‡Œä¸ç®—
 				//spec  *= Cspec;
 				
 
- 				float3 diff = (1 - matFresnel) * s.Albedo;
+ 				float3 diff = (1 - fresnel) * s.Albedo;
  
 				//
 				//float3 refDirW =  normalize( reflect(viewDir, s.Normal));
