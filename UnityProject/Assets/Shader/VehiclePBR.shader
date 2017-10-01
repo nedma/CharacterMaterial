@@ -43,6 +43,7 @@ SubShader
 			#include "AutoLight.cginc"
 
             #define USE_REAL_LIGHT
+			#define GAMMA_CORRECTION
             
             // vertex-to-fragment interpolation data
 			struct v2f_surf {
@@ -99,7 +100,9 @@ SubShader
              void surf (Input IN, inout SurfaceOutputCustom o)
             {
                 fixed4 albedo = tex2D(_MainTex, IN.uv_MainTex);
-		albedo.rgb = albedo.rgb * albedo.rgb;
+#ifdef GAMMA_CORRECTION
+				albedo.rgb = albedo.rgb * albedo.rgb;
+#endif
                 o.Albedo = albedo.rgb * _Color;
                 o.Alpha = albedo.a;
 
@@ -210,14 +213,20 @@ SubShader
                 //fixed3 aoForSpec = ShadeSH9 (float4(r, 1.0));
                 
 				// Direct lighting
-               	c.rgb = NdotL * (lightColor.rgb * atten)  * spec * Cspec;
-				c.rgb += NdotL * (lightColor.rgb * atten)  * diff;
+				float3 lightSpec = NdotL * (lightColor.rgb * atten)  * spec * Cspec;
+				float3 lightDiffuse = NdotL * (lightColor.rgb * atten)  * diff;
 
 				// Indirect lighting
-				c.rgb += NdotL * speuclarEnvRadiance * Cspec * spec;
-               	//c.rgb += NdotL * diffuseEnvRadiance  * diff;
-				c.rgb += _DiffuseEnvColor * diff; // use a const color to represent the env diffuse light
-                 
+				float3 envSpec =  NdotL * speuclarEnvRadiance * Cspec * spec;
+               	//float3 envDiff = NdotL * diffuseEnvRadiance  * diff;
+				float3 envDiff = _DiffuseEnvColor * diff; // use a const color to represent the env diffuse light
+				
+				c.rgb = 0.0f;
+				c.rgb += lightSpec;
+				c.rgb += lightDiffuse;
+				c.rgb += envSpec;
+				c.rgb += envDiff;
+
 				//c.rgb += s.Emission;
                 
                 c.a = s.Alpha;
@@ -314,7 +323,9 @@ SubShader
 			
 				c.a = o.Alpha;
 
+#ifdef GAMMA_CORRECTION
 				c.rgb = sqrt(c.rgb);
+#endif
 				return c;
 			}
 
